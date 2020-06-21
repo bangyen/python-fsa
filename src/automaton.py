@@ -173,7 +173,7 @@ class StateMach:
         # Groups similar state transitions. Not necessary for small alphabets or large FSAs (many states).
         temp = {}
         for k in self.fsa:
-            values    = set(v for v in self.fsa[k].values() if type(v) is not bool)
+            values    = set(v for v in self.fsa[k].values() if not isinstance(v, bool))
             sort_func = lambda x: x if isinstance(x, int) else ord(x)
             new       = {}
             for v in values:
