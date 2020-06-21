@@ -28,13 +28,16 @@ class StateMach:
     def __init__(self, fsa):
         self.fsa    = fsa
         self.state  = [k for k in fsa if fsa[k]['start']][0]
+        self.accept = self.fsa[self.state]['accept']
         self.is_min = False
         self.norm()
 
     def __call__(self, *arg):
-        if type(arg[0]) is list: arg = arg[0]
+        if isinstance(arg[0], list):
+            arg = arg[0]
         for k in arg:
             self.state = self.fsa[self.state][k]
+        self.accept = self.fsa[self.state]['accept']
         return self
 
     def __str__(self):
@@ -94,7 +97,7 @@ class StateMach:
                 for j in range(size):
                     if not table[i][j] and i != j:
                         for k,v in self.fsa[f'S{i}'].items():
-                            if type(v) is not bool:
+                            if not isinstance(v, bool):
                                 x = self.fsa[f'S{i}'][k]
                                 y = self.fsa[f'S{j}'][k]
                                 if table[int(x[1:])][int(y[1:])]:
@@ -105,7 +108,7 @@ class StateMach:
             for j in range(i):
                 if not table[i][j]:
                     sim.add((j, i))
-        sim = list(map(lambda s: set(s), sim))
+        sim = list(map(set, sim))
         # Joins sets together until all sets are pairwise disjoint.
         unmerged = True
         while unmerged:
@@ -145,7 +148,7 @@ class StateMach:
         stop     = f'\tif arg == "stop": return "accept" if state == "{start}" else "reject" \n'
         cond     = lambda st: f'\tif state == "{st}":\n'
         resp     = lambda a, n, st: f'\t\tif str(arg) == "{a}": return lambda a: {n}(a, "{st}")\n'
-        instruct = lambda d: {k: d[k] for k in d if type(d[k]) is not bool}
+        instruct = lambda d: {k: d[k] for k in d if not isinstance(d[k], bool)}
         func     = define + '\tprint(state)\n' * output + stop
         for j in self.fsa:
             func += cond(j)
@@ -171,7 +174,7 @@ class StateMach:
         temp = {}
         for k in self.fsa:
             values    = set(v for v in self.fsa[k].values() if type(v) is not bool)
-            sort_func = lambda x: x if type(x) is int else ord(x)
+            sort_func = lambda x: x if isinstance(x, int) else ord(x)
             new       = {}
             for v in values:
                 i_sort = sorted([j for j in self.fsa[k] if self.fsa[k][j] == v], key=sort_func)
@@ -191,6 +194,6 @@ class StateMach:
             if temp[key]['start']:
                 state.edge('', key, arrowsize='0.75')
             for k,v in temp[key].items():
-                if type(v) is not bool:
+                if not isinstance(v, bool):
                     state.edge(key, v, label=str(k), arrowsize='0.75')
         return state
