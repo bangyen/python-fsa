@@ -1,28 +1,5 @@
 from graphviz import Digraph
 
-# Using an finite-state automaton that checks if a binary number is divisible by three as an example,
-# FSAs will be represented as follows:
-divisible = {
-    'S0': {0: 'S0', 1: 'S1', 'start': True , 'accept': True },
-    'S1': {0: 'S2', 1: 'S0', 'start': False, 'accept': False},
-    'S2': {0: 'S1', 1: 'S2', 'start': False, 'accept': False}
-}
-# Each key represents a different state, and each value contains a dictionary
-# with the following information: the new state upon reception of a particular input,
-# whether a state is the starting state, and whether a state is an accepting state.
-
-# Additionally, the matrix representation of the directed graph corresponding to
-# the aforementioned FSA is as follows:
-div_matrix = [
-    [ 0,  1, ()],
-    [ 1, (),  0],
-    [(),  0,  1]
-]
-# The ij-th entry indicates which symbols cause a transition from the i-th state to the j-th state.
-# If an entry is the empty tuple, nothing causes a transition between the two.
-# Notation adapted from:
-# 'Generalized transition matrix of a sequential machine and its applications' - T.Kameda
-
 
 class StateMach:
     def __init__(self, fsa):
@@ -138,35 +115,6 @@ class StateMach:
         self.norm()
         self.is_min = True
         return self
-
-    # Creates a named function code object which mimics the FSA.
-    def function(self, name, output=False):
-        if not name.replace('_', '').isalnum():
-            return 'Not a valid name.'
-        start    = [k for k in self.fsa if self.fsa[k]['start']][0]
-        define   = f'def {name}(arg, state="{start}"):\n'
-        stop     = f'\tif arg == "stop": return "accept" if state == "{start}" else "reject" \n'
-        cond     = lambda st: f'\tif state == "{st}":\n'
-        resp     = lambda a, n, st: f'\t\tif str(arg) == "{a}": return lambda a: {n}(a, "{st}")\n'
-        instruct = lambda d: {k: d[k] for k in d if not isinstance(d[k], bool)}
-        func     = define + '\tprint(state)\n' * output + stop
-        for j in self.fsa:
-            func += cond(j)
-            for k, v in instruct(self.fsa[j]).items():
-                func += resp(k, name, v)
-        code = compile(func, 'fsa', 'exec')
-        return code
-
-    # Converts the FSA to a matrix.
-    def matrix(self):
-        size  = len(self.fsa)
-        trans = lambda mach, old, new: tuple(i for i in mach[old] if mach[old][i] == new)
-        entry = lambda e: e[0] if len(e) == 1 else e
-        res   = [[] for _ in range(size)]
-        for k in range(size):
-            for j in range(size):
-                res[k].append(entry(trans(self.fsa, f'S{k}', f'S{j}')))
-        return res
 
     # Creates a visual representation of the FSA using Graphviz.
     def graph(self, space=False):
