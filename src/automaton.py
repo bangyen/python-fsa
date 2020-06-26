@@ -96,7 +96,7 @@ class StateMach:
             values = set(trans.values()) - {True, False}
 
             def sort_func(value):
-                return value if isinstance(value, int) else ord(val)
+                return value if isinstance(value, int) else ord(value)
 
             new = {}
             for val in values:
@@ -112,11 +112,8 @@ class StateMach:
             temp[key] = new
         return temp
 
-    # Minimizes the FSA using the table-filling algorithm.
-    def fsa_min(self):
-        if self.is_min:
-            return self
-        # Removes unreachable states.
+    # Removes unreachable states.
+    def remove(self):
         reach = True
         while reach:
             reach = False
@@ -128,6 +125,13 @@ class StateMach:
                     del self.fsa[key]
                     reach = True
                     break
+        return self
+    
+    # Minimizes the FSA using the table-filling algorithm.
+    def fsa_min(self):
+        if self.is_min:
+            return self
+        self.remove()
         self.norm()
         # Divides states into accepting and non-accepting.
         copy, size = 0, len(self.fsa)
