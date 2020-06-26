@@ -30,5 +30,5 @@ The ij-th entry indicates which symbols cause a transition from the i-th state t
 `combine(*states)`: Combines the given NFA states. \
 `fsa_min()`: Minimizes a DFA by using the table-filling algorithm. \
 `remove()`: Removes unreachable states of an FSA. \
-`norm()`: Normalizes the FSA by renaming states to fit the aforementioned convention. \
 `graph()`: Creates a Graphviz Digraph object representing the FSA. \
+`norm()`: Normalizes the FSA by renaming states to fit the aforementioned convention.
