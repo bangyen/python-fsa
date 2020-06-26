@@ -3,59 +3,112 @@ from graphviz import Digraph
 
 class StateMach:
     def __init__(self, fsa):
+        """
+        Initializes the StateMach object with its FSA, sets the initial state,
+        sets the initial acceptance value, then normalizes it.
+        :param fsa: The dictionary representation of the FSA.
+        """
         self.fsa = fsa
 
-        start_num = sum(self.fsa[k]["start"] for k in self.fsa)
-        trans_num = sum(
-            any(isinstance(v, list) for v in self.fsa[k].values()) for k in self.fsa
-        )
+        # start_num = sum(self.fsa[key]["start"] for key in self.fsa)
+        # trans_num = sum(
+        #     any(isinstance(val, list) for val in self.fsa[key].values())
+        #     for key in self.fsa
+        # )
 
-        if start_num != 1 or trans_num > 0:
-            self.to_dfa()
-        else:
-            self.state = [k for k in fsa if fsa[k]["start"]][0]
-            self.accept = self.fsa[self.state]["accept"]
+        self.state = [key for key in fsa if fsa[key]["start"]][0]
+        self.accept = self.fsa[self.state]["accept"]
 
         self.is_min = False
         self.norm()
 
     def __call__(self, *arg):
+        """
+        Accepts an input which is passed through the FSA,
+        changing the current state and whether the word is accepted.
+        :param arg: Either an int, multiple ints, or a list of ints.
+        :return: Returns self so as to allow multiple calls.
+        """
         if isinstance(arg[0], list):
             arg = arg[0]
-        for k in arg:
-            self.state = self.fsa[self.state][k]
+        for num in arg:
+            self.state = self.fsa[self.state][num]
         self.accept = self.fsa[self.state]["accept"]
         return self
 
     def __str__(self):
-        dct = "\n".join(f"{k}: {v}" for k, v in self.fsa.items())
+        """
+        Creates a table, where the left-hand side is the current state
+        and the right hand side is the associated information.
+        :return: Returns a more readable version of the FSA.
+        """
+        dct = "\n".join(f"{key}: {val}" for key, val in self.fsa.items())
         dct = dct.replace("True", "True ").replace("'", "").replace(", ", ",\t")
         return dct.replace("{", "| ").replace("}", " |")
 
     # Creates a StateMach object of an FSA that checks if a number is divisible by num in a particular base.
     @staticmethod
     def div_by(base, num):
-        def trans(k):
-            return {n: f"S{(base * k + n) % num}" for n in range(base)}
+        def trans(state):
+            return {sym: f"S{(base * state + sym) % num}" for sym in range(base)}
 
-        fsa = {f"S{k}": trans(k) for k in range(num)}
-        for k in fsa:
-            fsa[k].update({"start": False, "accept": False})
+        fsa = {f"S{state}": trans(state) for state in range(num)}
+        for key in fsa:
+            fsa[key].update({"start": False, "accept": False})
         fsa["S0"]["start"] = fsa["S0"]["accept"] = True
         return StateMach(fsa)
 
+    # Combines states of an NFA.
+    def combine(self, *keys):
+        new_key = "{%s}" % ",".join(sorted(keys)).replace("{", "").replace("}", "")
+        new_val = {}
+        for sec_key in set().union(*[set(self.fsa[key]) for key in keys]):
+            states = set()
+            if sec_key not in ["start", "accept"]:
+                for key in keys:
+                    states.add(self.fsa[key][sec_key])
+                states = sorted(states)[0] if len(states) == 1 else sorted(states)
+            else:
+                states = any(self.fsa[key][sec_key] for key in keys)
+            new_val.update({sec_key: states})
+        return {new_key: new_val}
+
     # Normalizes an FSA by renaming states.
     def norm(self):
-        keys = sorted([k for k in self.fsa], key=lambda x: int(x[1:]))
-        key_dict = {k: f"S{keys.index(k)}" for k in keys}
-        key_dict.update({True: True, False: False})
+        key_list = sorted([key for key in self.fsa], key=lambda key: int(key[1:]))
+        trans_dict = {key: f"S{key_list.index(key)}" for key in key_list}
+        trans_dict.update({True: True, False: False})
         temp = {}
-        for k, v in self.fsa.items():
-            temp[key_dict[k]] = v
-            for m in v:
-                temp[key_dict[k]][m] = key_dict[v[m]]
+        for key, val in self.fsa.items():
+            temp[trans_dict[key]] = val
+            for sec_key in val:
+                temp[trans_dict[key]][sec_key] = trans_dict[val[sec_key]]
         self.fsa = temp
         return self
+
+    # Groups similar state transitions. Not necessary for small alphabets or large FSAs (many states).
+    def arrow_min(self, space=False):
+        temp = {}
+        for key in self.fsa:
+            trans = self.fsa[key]
+            values = set(trans.values()) - {True, False}
+
+            def sort_func(value):
+                return value if isinstance(value, int) else ord(val)
+
+            new = {}
+            for val in values:
+                sec_list = [sec_key for sec_key in trans if trans[sec_key] == val]
+                key_sort = sorted(sec_list, key=sort_func)
+                inputs = (
+                    ("," + " " * space).join(str(sec_key) for sec_key in key_sort)
+                    if len(key_sort) > 1
+                    else key_sort[0]
+                )
+                new.update({inputs: val})
+            new.update({"start": trans["start"], "accept": trans["accept"]})
+            temp[key] = new
+        return temp
 
     # Minimizes the FSA using the table-filling algorithm.
     def fsa_min(self):
@@ -66,40 +119,40 @@ class StateMach:
         while reach:
             reach = False
             values = set()
-            for v in self.fsa.values():
-                values |= set(v.values())
-            for k in self.fsa:
-                if k not in values:
-                    del self.fsa[k]
+            for val in self.fsa.values():
+                values |= set(val.values())
+            for key in self.fsa:
+                if key not in values:
+                    del self.fsa[key]
                     reach = True
                     break
         self.norm()
         # Divides states into accepting and non-accepting.
         copy, size = 0, len(self.fsa)
-        accept = [int(k[1:]) for k in self.fsa if self.fsa[k]["accept"]]
+        accept = [int(key[1:]) for key in self.fsa if self.fsa[key]["accept"]]
 
-        def diff(i, j):
-            return ((i in accept) + (j in accept)) % 2
+        def diff(row, col):
+            return ((row in accept) + (col in accept)) % 2
 
-        table = [[diff(i, j) for i in range(size)] for j in range(size)]
+        table = [[diff(row, col) for row in range(size)] for col in range(size)]
         # Fills the table.
         while copy != table:
-            copy = [k[:] for k in table]
-            for i in range(size):
-                for j in range(size):
-                    if not table[i][j] and i != j:
-                        for k, v in self.fsa[f"S{i}"].items():
-                            if not isinstance(v, bool):
-                                x = self.fsa[f"S{i}"][k]
-                                y = self.fsa[f"S{j}"][k]
-                                if table[int(x[1:])][int(y[1:])]:
-                                    table[i][j] = table[j][i] = 1
-        # Creates set of tuples of similar states.
+            copy = [row[:] for row in table]
+            for row in range(size):
+                for col in range(size):
+                    if not table[row][col] and row != col:
+                        for key, val in self.fsa[f"S{row}"].items():
+                            if not isinstance(val, bool):
+                                state_one = int(self.fsa[f"S{row}"][key][1:])
+                                state_two = int(self.fsa[f"S{col}"][key][1:])
+                                if table[state_one][state_two]:
+                                    table[row][col] = table[col][row] = 1
+        # Creates a set of tuples of similar states.
         sim = set()
-        for i in range(size):
-            for j in range(i):
-                if not table[i][j]:
-                    sim.add((j, i))
+        for row in range(size):
+            for col in range(row):
+                if not table[row][col]:
+                    sim.add((col, row))
         sim = list(map(set, sim))
         # Joins sets together until all sets are pairwise disjoint.
         unmerged = True
@@ -109,12 +162,12 @@ class StateMach:
             while sim:
                 common, rest = sim[0], sim[1:]
                 sim = []
-                for k in rest:
-                    if k.isdisjoint(common):
-                        sim.append(k)
+                for group in rest:
+                    if group.isdisjoint(common):
+                        sim.append(group)
                     else:
                         unmerged = True
-                        common |= k
+                        common |= group
                 results.append(common)
             sim = results
         # Replaces redundant states.
@@ -131,32 +184,9 @@ class StateMach:
         self.is_min = True
         return self
 
-    def to_dfa(self):
-        ...
-
     # Creates a visual representation of the FSA using Graphviz.
     def graph(self, space=False, circle=False):
-        # Groups similar state transitions. Not necessary for small alphabets or large FSAs (many states).
-        temp = {}
-        for k in self.fsa:
-            values = set(val for val in self.fsa[k].values() if type(val) is not bool)
-
-            def sort_func(x):
-                return x if isinstance(x, int) else ord(x)
-
-            new = {}
-            for v in values:
-                i_sort = sorted(
-                    [j for j in self.fsa[k] if self.fsa[k][j] == v], key=sort_func
-                )
-                inputs = (
-                    ("," + " " * space).join(str(i) for i in i_sort)
-                    if len(i_sort) > 1
-                    else i_sort[0]
-                )
-                new.update({inputs: v})
-            new.update({"start": self.fsa[k]["start"], "accept": self.fsa[k]["accept"]})
-            temp[k] = new
+        temp = self.arrow_min(space)
         # Creates the actual graph.
         state = Digraph()
         if circle:
@@ -171,7 +201,7 @@ class StateMach:
                 state.node(key, shape="circle")
             if temp[key]["start"]:
                 state.edge("", key, arrowsize="0.75")
-            for k, v in temp[key].items():
-                if not isinstance(v, bool):
-                    state.edge(key, v, label=str(k), arrowsize="0.75")
+            for sec_key, val in temp[key].items():
+                if not isinstance(val, bool):
+                    state.edge(key, val, label=str(sec_key), arrowsize="0.75")
         return state
