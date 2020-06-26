@@ -24,3 +24,11 @@ div_matrix = [
 ]
 ```
 The ij-th entry indicates which symbols cause a transition from the i-th state to the j-th state. If an entry is the empty tuple, nothing causes a transition between the two. Notation adapted from: 'Generalized transition matrix of a sequential machine and its applications' - T.Kameda
+
+## Methods
+`div_by(base, num)`: Creates a StateMach object that determines if a number in a given `base` is divisible by `num`.
+`combine(*states)`: Combines the given NFA states.
+`fsa_min()`: Minimizes a DFA by using the table-filling algorithm.
+`remove()`: Removes unreachable states of an FSA.
+`norm()`: Normalizes the FSA by renaming states to fit the aforementioned convention.
+`graph()`: Creates a Graphviz Digraph object representing the FSA.
