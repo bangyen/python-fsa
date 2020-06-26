@@ -26,7 +26,7 @@ div_matrix = [
 The ij-th entry indicates which symbols cause a transition from the i-th state to the j-th state. If an entry is the empty tuple, nothing causes a transition between the two. Notation adapted from: 'Generalized transition matrix of a sequential machine and its applications' - T.Kameda
 
 ## Methods
-| Methods | Functionality |
+| Name | Functionality |
 |-----|----|
 | `div_by` | Creates a StateMach object that determines if a number in a given `base` is divisible by `num`. |
 | `combine` | Combines the given NFA states into one state. |
