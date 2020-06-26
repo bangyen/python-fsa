@@ -5,7 +5,7 @@ class StateMach:
     def __init__(self, fsa):
         """
         Initializes the object with its FSA, sets initial values, then normalizes it.
-        
+
         :param fsa: The dictionary representation of the FSA.
         """
         self.fsa = fsa
