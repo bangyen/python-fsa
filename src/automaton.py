@@ -4,9 +4,7 @@ from graphviz import Digraph
 class StateMach:
     def __init__(self, fsa):
         """
-        
-        Initializes the StateMach object with its FSA, sets the initial state,
-        sets the initial acceptance value, then normalizes it.
+        Initializes the object with its FSA, sets initial values, then normalizes it.
         
         :param fsa: The dictionary representation of the FSA.
         """
