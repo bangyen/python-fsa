@@ -35,3 +35,9 @@ The ij-th entry indicates which symbols cause a transition from the i-th state t
 | `remove`  | Removes unreachable states of an FSA.                                                             |
 | `graph`   | Creates a Graphviz Digraph object representing the FSA.                                           |
 | `norm`    | Normalizes the FSA by renaming states to fit the aforementioned convention.                       |
+
+## Future Updates
+- [ ] Powerset construction
+- [ ] ε-closures
+- [x] NFA state combination
+- [x] Transition matrices
