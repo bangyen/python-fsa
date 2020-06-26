@@ -1,6 +1,7 @@
 import unittest
 import automaton
 
+
 class TestAuto(unittest.TestCase):
 
     def test_state(self):
