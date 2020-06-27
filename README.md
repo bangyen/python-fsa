@@ -1,6 +1,6 @@
 # Python State Machine
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/f7f5afb6b8414c74b4ea46cf3d49cb34)](https://app.codacy.com/manual/bangyen99/python-fsa?utm_source=github.com&utm_medium=referral&utm_content=bangyen/python-fsa&utm_campaign=Badge_Grade_Dashboard)
-![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](https://www.codacy.com/manual/bangyen99/python-fsa?utm_source=github.com&utm_medium=referral&utm_content=bangyen/python-fsa&utm_campaign=Badge_Coverage)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) \
 A Python class implementation of deterministic finite-state machines.
