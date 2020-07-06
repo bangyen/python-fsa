@@ -5,7 +5,7 @@ class StateMach:
     def __init__(self, fsa):
         """
         Initializes the object with its FSA, sets initial values, then normalizes it.
-        
+
         :param fsa: The dictionary representation of the FSA.
         """
         self.fsa = fsa
@@ -26,7 +26,7 @@ class StateMach:
         """
         Accepts an input which is passed through the FSA,
         changing the current state and whether the word is accepted.
-        
+
         :param arg: Either an int, multiple ints, or a list of ints.
         :return: Returns self so as to allow multiple calls.
         """
@@ -41,7 +41,7 @@ class StateMach:
         """
         Creates a table, where the left-hand side is the current state
         and the right hand side is the associated information.
-        
+
         :return: Returns a more readable version of the FSA.
         """
         dct = "\n".join(f"{key}: {val}" for key, val in self.fsa.items())
