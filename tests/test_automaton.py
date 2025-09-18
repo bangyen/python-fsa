@@ -10,6 +10,7 @@ import math
 from typing import Any
 
 import pytest
+
 from python_fsa import StateMachine
 from python_fsa.exceptions import (
     InvalidFSADefinitionError,
