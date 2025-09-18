@@ -179,7 +179,7 @@ class TestStateMachine:
         with pytest.raises(
             InvalidFSADefinitionError, match="FSA definition must be a dictionary"
         ):
-            StateMachine("not a dict")  # type: ignore[arg-type]
+            StateMachine("not a dict")
 
         # Test missing start state
         invalid_fsa = {
