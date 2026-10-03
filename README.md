@@ -12,6 +12,8 @@ useful for teaching, arithmetic experiments, and applications needing a small
 explicit automaton. It does not claim to replace broader formal-language tools
 such as automata-lib, pyformlang, or FAdo.
 
+For changes and migration from 1.x, see [CHANGELOG.md](CHANGELOG.md).
+
 ## Installation
 
 ```bash
