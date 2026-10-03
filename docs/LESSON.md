@@ -22,6 +22,10 @@ If you already have the 2.0.0 release wheel installed, you can skip installation
 This lesson uses the 2.0.0 API. Do not install `python-fsa` by name from PyPI:
 that name belongs to another project.
 
+The exercise command prints prompts; it does not ask for answers interactively.
+Open `examples/lesson_exercises.py` in your editor and replace the `None` values
+in `PREDICTIONS` as you work. Later, `--check` validates your saved answers.
+
 Our machine recognizes words over the alphabet `{a, b}` that contain `ab`.
 For example, `baab` matches, but `bbaa` does not. A word is a sequence of input
 symbols; the empty word has no symbols. A state records what the machine knows
@@ -39,7 +43,7 @@ The machine definition appears in `containing_ab()` in the exercise script:
 | State | Meaning | On `a` | On `b` | Accepting? |
 |---|---|---|---|---|
 | S0 | Keep searching for the start of `ab` | S0 and S1 | S0 | No |
-| S1 | An `a` could be the beginning of a match | No branch survives | S2 | No |
+| S1 | An `a` could be the beginning of a match | The S1 path dies | S2 | No |
 | S2 | An `ab` has already matched | S2 | S2 | Yes |
 
 `S0` is the start state. An NFA can follow multiple paths at once. On `a`, it
@@ -143,31 +147,15 @@ refinement algorithms provide the general argument.
 Design a DFA that accepts words ending in `ab`, rather than containing `ab`.
 Reuse three states, but make a match disappear when the ending changes:
 
-```python
-from python_fsa import StateMachine
+Write the definition yourself before checking the [reference solution](LESSON_ANSWERS.md).
+Check that `baab` accepts and `abba` rejects. Explain why `abba` distinguishes
+the two languages, find a second distinguishing word, and inspect your
+machine's `trace("abba")`.
 
-ending_ab = StateMachine({
-    "S0": {"a": "S1", "b": "S0", "start": True, "accept": False},
-    "S1": {"a": "S1", "b": "S2", "start": False, "accept": False},
-    "S2": {"a": "S1", "b": "S0", "start": False, "accept": True},
-})
-assert ending_ab.accepts("baab")
-assert not ending_ab.accepts("abba")
-```
+## Check your explanations
 
-Explain why `abba` distinguishes the two languages. Find a second distinguishing
-word, and check it with both machines. Then inspect `ending_ab.trace("abba")`.
-
-## Worked explanations
-
-- The empty word rejects because the initial active set contains only S0.
-- After `a`, the active set is `[S0, S1]`; after `ab`, it is `[S0, S2]`.
-- `bbaa` rejects; `baab` accepts.
-- The converted DFA has four reachable states. S0 is always active in the NFA,
-  so a subset containing only S1 cannot be reached.
-- Minimization merges converted DFA S2 and S3, leaving three states. Both
-  remember that a match already happened, and neither can lose that fact.
-- `abba` contains `ab` but does not end in `ab`. `aba` is another example.
+After making your predictions and attempting the transfer exercise, compare
+with the [worked answers and reference DFA](LESSON_ANSWERS.md).
 
 ## Learner feedback
 
