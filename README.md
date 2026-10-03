@@ -22,6 +22,11 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install .
 ```
 
+Download the wheel from the [2.0.0 GitHub release](https://github.com/bangyen/python-fsa/releases/tag/v2.0.0)
+and install it with `python -m pip install python_fsa-2.0.0-py3-none-any.whl`.
+The `python-fsa` name on PyPI belongs to a different project; installing it by
+name from PyPI does not install this repository.
+
 The Python Graphviz package is installed automatically. Rendering diagrams also
 requires the Graphviz system executable (`dot`); inspecting `.source` does not.
 

@@ -1,10 +1,9 @@
 # Changelog
 
-## 2.0.0 — release candidate
+## 2.0.0 — 2026-10-03
 
 This version focuses on correct execution, readable automata algorithms, and
-teaching tools. Release artifacts are prepared; this entry does not imply a
-published package or GitHub release.
+teaching tools. Release artifacts are distributed through GitHub Releases.
 
 ### Compatibility changes
 
