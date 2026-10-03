@@ -52,6 +52,7 @@ jobs:
         python examples/basic_usage.py
         python examples/advanced_features.py
         python examples/teaching.py
+        python examples/lesson_exercises.py --answers
 
     - name: Build and verify installed wheel
       run: |

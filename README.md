@@ -109,6 +109,9 @@ string key is an ordinary input symbol.
 
 ## Teaching: inspect each step
 
+Start with the [guided lesson](docs/LESSON.md) for predictions, runnable exercises,
+worked explanations, and a transfer task.
+
 ```python
 for step in nfa.trace("ab"):
     print(step)
