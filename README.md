@@ -169,8 +169,16 @@ CI checks Python 3.10–3.14, lint, formatting, type checking, tests, and instal
 from a built wheel. Run `make check` locally and `make build` to produce packages.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
+`machine.minimization_trace()` explains partition refinement without mutation.
+It returns the reachable, completed DFA definition, its alphabet, and refinement
+rounds. Each round lists groups and a transition signature for each state:
+the destination group indices in alphabet order. Within a group, different
+signatures cause a split; the final round is marked `stable=True`.
+Names refer to the returned definition, which can differ from the original
+machine after conversion and removal of unreachable states.
+
 Future work should serve a demonstrated teaching or application need. Useful
-candidates include minimization partition traces, epsilon closure, and machine
+candidates include epsilon closure and machine
 serialization. Broad regex/grammar tooling and high-performance automata are
 outside the current scope. Bug reports should include a machine definition,
 input sequence, expected result, and actual result.

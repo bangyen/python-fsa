@@ -161,3 +161,63 @@ def test_definition_is_copied() -> None:
     machine = StateMachine(definition)
     definition["S0"]["a"].clear()
     assert machine.fsa["S0"]["a"] == ["S0"]
+
+
+def test_minimization_trace_explains_splits_without_mutation() -> None:
+    machine = StateMachine(
+        {
+            "S0": {"a": "S1", "start": True, "accept": False},
+            "S1": {"a": "S2", "start": False, "accept": False},
+            "S2": {"a": "S2", "start": False, "accept": True},
+        }
+    )("a")
+    before = (machine.state, machine.active_states, machine.accept, machine.is_min)
+    analysis = machine.minimization_trace()
+    assert analysis["alphabet"] == ["a"]
+    assert analysis["rounds"] == [
+        {
+            "partitions": [["S2"], ["S0", "S1"]],
+            "signatures": {"S0": [1], "S1": [0], "S2": [0]},
+            "stable": False,
+        },
+        {
+            "partitions": [["S2"], ["S0"], ["S1"]],
+            "signatures": {"S0": [2], "S1": [0], "S2": [0]},
+            "stable": True,
+        },
+    ]
+    assert (
+        machine.state,
+        machine.active_states,
+        machine.accept,
+        machine.is_min,
+    ) == before
+    assert machine.minimization_trace() == analysis
+    analysis["definition"]["S0"]["a"] = "S0"
+    assert machine.fsa["S0"]["a"] == "S1"
+    assert len(machine.minimize().fsa) == 3
+
+
+@pytest.mark.parametrize("accept", [True, False])
+def test_minimization_trace_uniform_and_partial_machines(accept: bool) -> None:
+    machine = StateMachine({"S0": {"start": True, "accept": accept}})
+    trace = machine.minimization_trace()
+    assert trace["alphabet"] == []
+    assert trace["rounds"] == [
+        {"partitions": [["S0"]], "signatures": {"S0": []}, "stable": True}
+    ]
+    partial = StateMachine(
+        {
+            "S0": {"a": "S1", "start": True, "accept": False},
+            "S1": {"start": False, "accept": True},
+        }
+    )
+    trace = partial.minimization_trace()
+    assert len(trace["definition"]) == 3  # includes rejecting sink
+    assert len(trace["rounds"][-1]["partitions"]) == len(partial.minimize().fsa)
+
+
+def test_minimization_trace_requires_dfa() -> None:
+    nfa = StateMachine({"S0": {"a": ["S0"], "start": True, "accept": True}})
+    with pytest.raises(MinimizationError, match="to_dfa"):
+        nfa.minimization_trace()

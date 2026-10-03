@@ -581,17 +581,12 @@ class StateMachine:
 
         return self
 
-    def minimize(self) -> StateMachine:
-        """Minimize a DFA by partition refinement and reset execution.
-
-        Partial DFAs are completed with a rejecting sink before refinement.
-        Convert NFAs with ``to_dfa()`` first. Work is computed on a copy so
-        failures do not leave the original machine partially modified.
-        """
+    def _minimization_analysis(
+        self, collect_trace: bool = False
+    ) -> tuple[StateMachine, list[set[str]], list[dict[str, Any]]]:
+        """Refine reachable, completed DFA partitions in deterministic order."""
         if not self.is_deterministic:
             raise MinimizationError("Convert an NFA with to_dfa() before minimization")
-        if self.is_min:
-            return self
         machine = self.to_dfa()
         alphabet = [
             symbol for symbol in machine.fsa["S0"] if symbol not in ("start", "accept")
@@ -602,24 +597,74 @@ class StateMachine:
         partitions = [
             group for group in (accepting, set(machine.fsa) - accepting) if group
         ]
+        rounds: list[dict[str, Any]] = []
         while True:
             membership = {
                 state: index
                 for index, group in enumerate(partitions)
                 for state in group
             }
+            signatures = {
+                state: [membership[machine.fsa[state][symbol]] for symbol in alphabet]
+                for state in sorted(machine.fsa)
+            }
             refined: list[set[str]] = []
             for group in partitions:
                 buckets: dict[tuple[int, ...], set[str]] = {}
                 for state in sorted(group):
-                    signature = tuple(
-                        membership[machine.fsa[state][symbol]] for symbol in alphabet
-                    )
+                    signature = tuple(signatures[state])
                     buckets.setdefault(signature, set()).add(state)
                 refined.extend(buckets.values())
-            if len(refined) == len(partitions):
+            stable = len(refined) == len(partitions)
+            if collect_trace:
+                rounds.append(
+                    {
+                        "partitions": [sorted(group) for group in partitions],
+                        "signatures": signatures,
+                        "stable": stable,
+                    }
+                )
+            if stable:
                 break
             partitions = refined
+        return machine, partitions, rounds
+
+    def minimization_trace(self) -> dict[str, Any]:
+        """Explain DFA partition refinement without changing execution or structure.
+
+        ``definition`` is the reachable, completed DFA used for analysis; its
+        names may differ from the original. Each round includes partitions and
+        transition signatures: target partition indices in ``alphabet`` order.
+        States in the same partition split when their signatures differ.
+        The final round has ``stable=True`` and contains the equivalence classes.
+        """
+        machine, _, rounds = self._minimization_analysis(collect_trace=True)
+        return {
+            "definition": deepcopy(machine.fsa),
+            "alphabet": [
+                symbol
+                for symbol in machine.fsa["S0"]
+                if symbol not in ("start", "accept")
+            ],
+            "rounds": rounds,
+        }
+
+    def minimize(self) -> StateMachine:
+        """Minimize a DFA by partition refinement and reset execution.
+
+        Partial DFAs are completed with a rejecting sink before refinement.
+        Convert NFAs with ``to_dfa()`` first. Work is computed on a copy so
+        failures do not leave the original machine partially modified.
+        """
+        if self.is_min:
+            return self
+        machine, partitions, _ = self._minimization_analysis()
+        alphabet = [
+            symbol for symbol in machine.fsa["S0"] if symbol not in ("start", "accept")
+        ]
+        accepting = {
+            state for state, definition in machine.fsa.items() if definition["accept"]
+        }
         partitions.sort(key=lambda group: min(int(state[1:]) for state in group))
         mapping = {
             state: f"S{index}"

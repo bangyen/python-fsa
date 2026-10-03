@@ -16,6 +16,13 @@ def main() -> None:
     for step in nfa.trace(word):
         print(step)
     dfa = nfa.to_dfa()
+    print("Partition refinement (target group indices follow alphabet order):")
+    analysis = dfa.minimization_trace()
+    print(f"Alphabet: {analysis['alphabet']}")
+    for index, step in enumerate(analysis["rounds"]):
+        print(f"Round {index}: {step['partitions']}; stable={step['stable']}")
+        for state, signature in step["signatures"].items():
+            print(f"  {state}: {signature}")
     minimal = nfa.to_dfa().minimize()
     for name, machine in (("NFA", nfa), ("DFA", dfa), ("minimal DFA", minimal)):
         print(f"{name}: {len(machine.fsa)} states; accepted={machine.accepts(word)}")
