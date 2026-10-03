@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check clean build
+.PHONY: help install test lint format type-check check clean build
 
 help: ## Show this help message
 	@echo "Available commands (activate virtual environment first):"
@@ -12,12 +12,12 @@ test: ## Run tests with coverage
 	pytest tests/ -v --cov=src --cov-report=term-missing
 
 lint: ## Run linting and formatting checks
-	ruff check src tests
-	black --check src tests
+	ruff check src tests examples
+	black --check src tests examples
 
 format: ## Format code with black and ruff
-	black src tests
-	ruff check --fix src tests
+	black src tests examples
+	ruff check --fix src tests examples
 
 type-check: ## Run type checking
 	mypy src

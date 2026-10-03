@@ -1,316 +1,178 @@
-# Python FSA - Finite State Automaton Library
+# Python FSA
 
 [![CI](https://github.com/bangyen/python-fsa/workflows/CI/badge.svg)](https://github.com/bangyen/python-fsa/actions)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-A comprehensive Python library for working with finite state automata (FSA), supporting both deterministic (DFA) and non-deterministic (NFA) automata with advanced operations including minimization, state combination, visualization, and more.
+A small Python 3.10+ library for learning and experimenting with finite state
+automata. Define a machine using dictionaries, process inputs, inspect execution
+steps, convert NFAs to DFAs, minimize DFAs, and draw state diagrams.
 
-## Features
-
-- **Complete FSA Support**: Both DFA and NFA implementations
-- **Advanced Operations**: Minimization, state combination, unreachable state removal
-- **Visualization**: Graphviz integration for FSA diagrams
-- **Type Safety**: Full type hints and comprehensive error handling
-- **Performance**: Optimized algorithms with efficient data structures
-- **Extensible**: Clean API design for custom FSA implementations
+The project focuses on readable algorithms and classroom-sized examples. It is
+useful for teaching, arithmetic experiments, and applications needing a small
+explicit automaton. It does not claim to replace broader formal-language tools
+such as automata-lib, pyformlang, or FAdo.
 
 ## Installation
 
-### From Source
-
 ```bash
-git clone https://github.com/bangyen/python-fsa.git
-cd python-fsa
-
-# Create and activate virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install the package
-pip install -e .
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install .
 ```
 
-### Development Installation
+The Python Graphviz package is installed automatically. Rendering diagrams also
+requires the Graphviz system executable (`dot`); inspecting `.source` does not.
+
+For development:
 
 ```bash
-git clone https://github.com/bangyen/python-fsa.git
-cd python-fsa
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install development dependencies
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 pre-commit install
+make check
 ```
 
-### Alternative Installation Options
-
-```bash
-# Activate virtual environment first
-source venv/bin/activate
-
-# Install with specific dependency groups
-pip install -e ".[test]"      # Testing dependencies only
-pip install -e ".[lint]"      # Linting and formatting tools
-pip install -e ".[docs]"      # Documentation tools
-pip install -e ".[all]"       # All optional dependencies
-```
-
-## Quick Start
-
-### Basic Usage
+## Independent checks and streaming
 
 ```python
 from python_fsa import StateMachine
 
-# Create a divisibility checker (binary numbers divisible by 3)
-fsa = StateMachine.create_divisibility_checker(2, 3)
+machine = StateMachine.create_divisibility_checker(base=2, divisor=3)
+assert machine.accepts([1, 1])       # Binary 11 = 3
+assert not machine.accepts([1, 0, 1])  # Binary 101 = 5
 
-# Process input
-result = fsa(1, 1)  # Binary 11 (decimal 3)
-print(f"Accepted: {result.accept}")  # True
-
-# Test different inputs
-test_cases = [
-    ([1, 1], "Binary 11 (decimal 3)"),
-    ([1, 0, 1], "Binary 101 (decimal 5)"),
-    ([1, 1, 0], "Binary 110 (decimal 6)")
-]
-
-for input_seq, description in test_cases:
-    fsa_copy = StateMachine.create_divisibility_checker(2, 3)
-    result = fsa_copy(*input_seq)
-    print(f"{description}: {'ACCEPTED' if result.accept else 'REJECTED'}")
+# accepts() always starts fresh and leaves execution state unchanged.
+# Calling the machine processes a stream and changes its execution state.
+machine(1)(1)
+assert machine.accept
+machine.reset()
+assert machine.state == "S0"
 ```
 
-### Custom FSA Definition
+`machine(*symbols)` and `machine([symbols])` both support chaining. Pass a word
+as `machine(*"ab")`, or use `machine.accepts("ab")` for an independent check.
+A plain `machine("ab")` processes a single symbol named `ab`.
+
+## Define an automaton
 
 ```python
-# Create a custom DFA that accepts strings ending in 'ab'
-fsa = StateMachine({
-    'S0': {'a': 'S1', 'b': 'S0', 'start': True, 'accept': False},
-    'S1': {'a': 'S1', 'b': 'S2', 'start': False, 'accept': False},
-    'S2': {'a': 'S1', 'b': 'S0', 'start': False, 'accept': True}
+machine = StateMachine({
+    "waiting": {"a": "seen_a", "b": "waiting", "start": True, "accept": False},
+    "seen_a": {"a": "seen_a", "b": "matched", "start": False, "accept": False},
+    "matched": {"a": "seen_a", "b": "waiting", "start": False, "accept": True},
 })
-
-# Test strings
-test_strings = ['ab', 'aab', 'baab', 'abab', 'ba']
-for test_str in test_strings:
-    fsa_copy = StateMachine({
-        'S0': {'a': 'S1', 'b': 'S0', 'start': True, 'accept': False},
-        'S1': {'a': 'S1', 'b': 'S2', 'start': False, 'accept': False},
-        'S2': {'a': 'S1', 'b': 'S0', 'start': False, 'accept': True}
-    })
-    result = fsa_copy(*list(test_str))
-    print(f"'{test_str}': {'ACCEPTED' if result.accept else 'REJECTED'}")
+assert machine.accepts("aab")
+assert not machine.accepts("aba")
 ```
 
-### NFA Support
+Definitions require exactly one start state and boolean `start`/`accept` flags
+on every state. Targets must reference existing states. State names are normalized
+to `S0`, `S1`, etc.; input symbols are normalized to strings, so `1` and `"1"`
+represent the same input. Defining both keys in one state is rejected.
+`start` and `accept` are reserved metadata keys and cannot be input symbols.
+The constructor copies the definition. Treat the public `fsa` dictionary as
+read-only; construct a new machine to change the transition structure.
+
+## NFAs and conversion
 
 ```python
-# Create an NFA that accepts strings containing 'ab' or 'ba'
 nfa = StateMachine({
-    'S0': {'a': ['S0', 'S1'], 'b': ['S0', 'S2'], 'start': True, 'accept': False},
-    'S1': {'b': 'S3', 'start': False, 'accept': False},
-    'S2': {'a': 'S3', 'start': False, 'accept': False},
-    'S3': {'a': 'S3', 'b': 'S3', 'start': False, 'accept': True}
+    "S0": {"a": ["S0", "S1"], "b": "S0", "start": True, "accept": False},
+    "S1": {"b": "S2", "start": False, "accept": False},
+    "S2": {"a": "S2", "b": "S2", "start": False, "accept": True},
 })
+assert nfa.accepts("baab")  # Contains ab
+assert not nfa.accepts("bbaa")
+
+dfa = nfa.to_dfa()
+minimal = dfa.minimize()
+assert minimal.accepts("baab")
 ```
 
-## Advanced Features
+NFA execution tracks all possible destinations in `active_states`, a frozenset.
+A word is accepted if any active state accepts it. Missing NFA transitions and
+empty destination lists eliminate that branch; an empty active set rejects.
+`state` is a string when exactly one state is active and a frozenset otherwise.
+Use `active_states` when writing code that handles both DFAs and NFAs.
 
-### DFA Minimization
+`to_dfa()` starts from the declared start state and constructs reachable subsets.
+It returns a new complete DFA, including a rejecting sink when needed.
+Subset construction may produce exponentially many states, so this library is
+intended for small machines. Epsilon transitions are not supported; an empty
+string key is an ordinary input symbol.
+
+## Teaching: inspect each step
 
 ```python
-# Create a DFA that can be minimized
-fsa = StateMachine({
-    'S0': {0: 'S1', 1: 'S2', 'start': True, 'accept': False},
-    'S1': {0: 'S0', 1: 'S3', 'start': False, 'accept': False},
-    'S2': {0: 'S4', 1: 'S5', 'start': False, 'accept': True},
-    'S3': {0: 'S4', 1: 'S5', 'start': False, 'accept': True},
-    'S4': {0: 'S4', 1: 'S5', 'start': False, 'accept': True},
-    'S5': {0: 'S5', 1: 'S5', 'start': False, 'accept': False}
-})
-
-print(f"Before minimization: {len(fsa.fsa)} states")
-minimized = fsa.minimize()
-print(f"After minimization: {len(minimized.fsa)} states")
+for step in nfa.trace("ab"):
+    print(step)
+# {'symbol': None, 'states': ['S0'], 'accept': False}
+# {'symbol': 'a', 'states': ['S0', 'S1'], 'accept': False}
+# {'symbol': 'b', 'states': ['S0', 'S2'], 'accept': True}
 ```
 
-### State Combination (NFA to DFA)
+`trace()` includes the initial configuration and one record per input, without
+changing the original machine. This makes it suitable for notebooks, lessons,
+and explaining why a word was accepted. Run `python examples/teaching.py` for a
+complete example comparing an NFA, its DFA, and its minimal DFA.
+
+DFA minimization uses partition refinement:
+
+1. Complete the transition table and retain reachable states.
+2. Separate accepting and rejecting states.
+3. Split each group by the groups reached on every input symbol.
+4. Repeat until no group splits, then replace each group with one state.
+
+The implementation favors clarity over large-scale performance. Regression tests
+compare accepted languages over exhaustive short words and check divisibility
+machines against integer arithmetic.
+
+## Execution and error semantics
+
+- `reset()` returns to the declared start state.
+- `accepts(sequence)` starts fresh, returns a boolean, and never changes the original.
+  Undefined DFA transitions reject the word.
+- Streaming a missing DFA transition raises `InvalidTransitionError`. Successfully
+  processed earlier symbols remain committed, with `accept` kept consistent.
+- `trace(sequence)` raises on an undefined DFA transition, identifying the failing
+  step through the exception's `from_state` and `input_symbol` attributes.
+- `minimize()` changes the DFA in place and resets execution when it performs
+  minimization. Repeated calls on an already minimized DFA return the same object.
+  Convert an NFA first; direct NFA minimization raises `MinimizationError`.
+- Partial DFAs are supported; minimization completes missing transitions with a
+  rejecting sink. The result preserves acceptance behavior, though missing
+  transitions become explicit transitions.
+- `remove_unreachable_states()` uses the declared start state, regardless of
+  how much input has been processed.
+
+All public exceptions are exported from `python_fsa`: `FSAError`,
+`InvalidFSADefinitionError`, `InvalidStateError`, `InvalidTransitionError`,
+and `MinimizationError`.
+
+## Visualization and compatibility
 
 ```python
-# Combine NFA states for DFA conversion
-nfa = StateMachine({
-    'S0': {0: 'S0', 1: ['S0', 'S1'], 'start': True, 'accept': False},
-    'S1': {0: 'S1', 1: 'S1', 'start': False, 'accept': True}
-})
-
-combined_state = nfa.combine_states('S0', 'S1')
-print(combined_state)
+machine.create_graph().render("automaton", format="svg", cleanup=True)
+print(machine.create_graph().source)
 ```
 
-### Visualization
+`create_graph()` handles DFA and NFA edges, combines equivalent edge labels by
+default, and supports `add_spaces=True` and `circular_layout=True`.
+`combine_states(*names)` returns one combined state definition; it does not
+convert a whole NFA. Use `to_dfa()` for conversion.
 
-```python
-# Create a graph visualization
-fsa = StateMachine.create_divisibility_checker(10, 2)
-graph = fsa.create_graph()
+Legacy aliases remain available: `div_by`, `combine`, `norm`, `arrow_min`,
+`remove`, `fsa_min`, and `graph`.
 
-# Render to file (requires Graphviz)
-graph.render('divisibility_by_2', format='png')
-```
+## Maintenance and scope
 
-## API Reference
+CI checks Python 3.10–3.14, lint, formatting, type checking, tests, and installation
+from a built wheel. Run `make check` locally and `make build` to produce packages.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
-### StateMachine Class
+Future work should serve a demonstrated teaching or application need. Useful
+candidates include minimization partition traces, epsilon closure, and machine
+serialization. Broad regex/grammar tooling and high-performance automata are
+outside the current scope. Bug reports should include a machine definition,
+input sequence, expected result, and actual result.
 
-#### Constructor
-- `StateMachine(fsa_definition)` - Create FSA from dictionary definition
-
-#### Factory Methods
-- `StateMachine.create_divisibility_checker(base, divisor)` - Create divisibility checker
-
-#### Core Methods
-- `__call__(*inputs)` - Process input symbols through the FSA
-- `minimize()` - Minimize the DFA using table-filling algorithm
-- `remove_unreachable_states()` - Remove states not reachable from start
-- `combine_states(*state_names)` - Combine NFA states into single state
-- `create_graph(**options)` - Create Graphviz visualization
-
-#### Utility Methods
-- `minimize_arrows(add_spaces=False)` - Optimize transition labels
-- `__str__()` - Human-readable string representation
-
-### FSA Definition Format
-
-```python
-fsa_definition = {
-    'StateName': {
-        'input_symbol': 'target_state',  # or ['state1', 'state2'] for NFA
-        'start': True/False,
-        'accept': True/False
-    }
-}
-```
-
-### Error Handling
-
-The library provides comprehensive error handling with custom exceptions:
-
-- `FSAError` - Base exception for all FSA errors
-- `InvalidFSADefinitionError` - Invalid FSA definition
-- `InvalidStateError` - Invalid state reference
-- `InvalidTransitionError` - Invalid transition attempt
-- `MinimizationError` - Minimization algorithm failure
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run with coverage
-pytest tests/ -v --cov=src --cov-report=html
-
-# Run specific test file
-pytest tests/test_automaton.py -v
-```
-
-### Code Quality
-
-The project includes a simplified Makefile for common development tasks:
-
-```bash
-# Activate virtual environment first
-source venv/bin/activate
-
-# Run all quality checks (lint, type-check, test)
-make check
-
-# Format code
-make format
-
-# Run linting checks
-make lint
-
-# Run type checking
-make type-check
-
-# Run tests with coverage
-make test
-
-# Clean build artifacts
-make clean
-
-# Build package
-make build
-
-# Show all available commands
-make help
-```
-
-Or run commands directly:
-
-```bash
-# Format code
-black src tests
-ruff check --fix src tests
-
-# Lint code
-ruff check src tests
-black --check src tests
-
-# Type checking
-mypy src
-```
-
-### Pre-commit Hooks
-
-```bash
-# Install pre-commit hooks
-pre-commit install
-
-# Run hooks manually
-pre-commit run --all-files
-```
-
-## Examples
-
-See the `examples/` directory for comprehensive usage examples:
-
-- `basic_usage.py` - Core functionality demonstration
-- `advanced_features.py` - Advanced features and error handling
-
-## Performance
-
-The library is optimized for performance with:
-
-- Efficient state representation
-- Optimized minimization algorithms
-- Memory-conscious data structures
-- Lazy evaluation where appropriate
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass and code quality checks succeed
-6. Submit a pull request
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Inspired by classical automata theory and formal language processing
-- Uses Graphviz for visualization
+Licensed under GPL-3.0; see [LICENSE](LICENSE).

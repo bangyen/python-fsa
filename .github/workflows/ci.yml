@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
     - uses: actions/checkout@v4
@@ -33,11 +33,11 @@ jobs:
 
     - name: Lint with ruff
       run: |
-        ruff check src tests
+        ruff check src tests examples
 
     - name: Format check with black
       run: |
-        black --check src tests
+        black --check src tests examples
 
     - name: Type check with mypy
       run: |
@@ -46,6 +46,20 @@ jobs:
     - name: Test with pytest
       run: |
         pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+
+    - name: Run examples
+      run: |
+        python examples/basic_usage.py
+        python examples/advanced_features.py
+        python examples/teaching.py
+
+    - name: Build and verify installed wheel
+      run: |
+        python -m build
+        python -m venv /tmp/fsa-wheel
+        /tmp/fsa-wheel/bin/pip install dist/*.whl
+        cd /tmp
+        /tmp/fsa-wheel/bin/python -c "from python_fsa import StateMachine; assert StateMachine.div_by(2, 3).accepts([1, 1])"
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

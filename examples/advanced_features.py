@@ -40,24 +40,9 @@ def demonstrate_nfa_operations() -> None:
     # Test some strings
     test_strings = ["ab", "ba", "aab", "bba", "abc", "xyz", "abab"]
     for test_str in test_strings:
-        try:
-            nfa_copy = StateMachine(
-                {
-                    "S0": {
-                        "a": ["S0", "S1"],
-                        "b": ["S0", "S2"],
-                        "start": True,
-                        "accept": False,
-                    },
-                    "S1": {"b": "S3", "start": False, "accept": False},
-                    "S2": {"a": "S3", "start": False, "accept": False},
-                    "S3": {"a": "S3", "b": "S3", "start": False, "accept": True},
-                }
-            )
-            result = nfa_copy(*list(test_str))
-            print(f"'{test_str}': {'ACCEPTED' if result.accept else 'REJECTED'}")
-        except Exception as e:
-            print(f"'{test_str}': ERROR - {e}")
+        print(f"{test_str!r}: {'ACCEPTED' if nfa.accepts(test_str) else 'REJECTED'}")
+    dfa = nfa.to_dfa().minimize()
+    assert all(nfa.accepts(word) == dfa.accepts(word) for word in test_strings)
     print()
 
 
@@ -205,10 +190,11 @@ def demonstrate_performance_features() -> None:
         }
     )
 
-    print(f"   Before minimization: {len(large_fsa.fsa)} states")
+    before_count = len(large_fsa.fsa)
+    print(f"   Before minimization: {before_count} states")
     minimized = large_fsa.minimize()
     print(f"   After minimization: {len(minimized.fsa)} states")
-    print(f"   Reduction: {len(large_fsa.fsa) - len(minimized.fsa)} states")
+    print(f"   Reduction: {before_count - len(minimized.fsa)} states")
     print()
 
 

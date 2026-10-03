@@ -6,7 +6,6 @@ DFA/NFA operations, minimization, state combination, visualization,
 and error handling.
 """
 
-import math
 from typing import Any
 
 import pytest
@@ -277,30 +276,6 @@ class TestStateMachine:
         # S3 should be removed
         assert "S3" not in fsa.fsa
         assert len(fsa.fsa) == 3
-
-    def test_math_isclose_for_float_tolerances(self) -> None:
-        """Test using math.isclose for float comparisons in tests."""
-        # This test demonstrates the recommended approach for float comparisons
-        result = 0.1 + 0.2
-        expected = 0.3
-
-        # Use math.isclose instead of direct equality for floats
-        assert math.isclose(
-            result, expected, rel_tol=1e-9
-        ), "Float comparison should use math.isclose"
-
-    def test_seeded_randomness(self) -> None:
-        """Test that randomness is properly seeded for reproducible tests."""
-        import random
-
-        # Seed the random number generator for reproducible tests
-        random.seed(42)
-        first_run = [random.random() for _ in range(5)]
-
-        random.seed(42)
-        second_run = [random.random() for _ in range(5)]
-
-        assert first_run == second_run, "Seeded randomness should be reproducible"
 
 
 # Pytest fixtures for common test data

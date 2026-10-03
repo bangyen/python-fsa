@@ -9,12 +9,13 @@ minimization, state combination, visualization, and input processing.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Union
+from collections import deque
+from copy import deepcopy
+from typing import Any
 
 from graphviz import Digraph
 
 from .exceptions import (
-    FSAError,
     InvalidFSADefinitionError,
     InvalidStateError,
     InvalidTransitionError,
@@ -23,12 +24,10 @@ from .exceptions import (
 
 # Type aliases for better readability
 StateName = str
-InputSymbol = Union[int, str]
-TransitionMap = Dict[
-    str, Union[StateName, List[StateName]]
-]  # Use str keys for consistency
-StateDefinition = Dict[str, Any]
-FSADefinition = Dict[StateName, StateDefinition]
+InputSymbol = int | str
+TransitionMap = dict[str, StateName | list[StateName]]
+StateDefinition = dict[str, Any]
+FSADefinition = dict[StateName, StateDefinition]
 
 
 class StateMachine:
@@ -68,12 +67,13 @@ class StateMachine:
                 f"FSA must have exactly one start state, found {len(start_states)}"
             )
 
-        self.state = start_states[0]
-        self.accept = self.fsa[self.state].get("accept", False)
+        self.state: str | frozenset[str] = start_states[0]
+        self.accept: bool = bool(self.fsa[start_states[0]].get("accept", False))
         self.is_min = False
 
         # Normalize the FSA to ensure consistent state naming
         self._normalize()
+        self.reset()
 
     def _validate_fsa_definition(self, fsa: FSADefinition) -> None:
         """
@@ -92,6 +92,8 @@ class StateMachine:
             raise InvalidFSADefinitionError("FSA definition cannot be empty")
 
         for state_name, state_def in fsa.items():
+            if not isinstance(state_name, str):
+                raise InvalidFSADefinitionError("State names must be strings")
             if not isinstance(state_def, dict):
                 raise InvalidFSADefinitionError(
                     f"State '{state_name}' definition must be a dictionary"
@@ -103,11 +105,33 @@ class StateMachine:
                     f"State '{state_name}' must have 'start' and 'accept' fields"
                 )
 
+            if not all(isinstance(state_def[key], bool) for key in ("start", "accept")):
+                raise InvalidFSADefinitionError(
+                    "Start and accept flags must be booleans"
+                )
+
+            symbols = [
+                str(symbol) for symbol in state_def if symbol not in ("start", "accept")
+            ]
+            if len(symbols) != len(set(symbols)):
+                raise InvalidFSADefinitionError(
+                    "Input symbols collide after conversion to strings"
+                )
+
             # Validate transitions reference existing states
             for symbol, target in state_def.items():
                 if symbol in ("start", "accept"):
                     continue
 
+                if not isinstance(symbol, (str, int)):
+                    raise InvalidFSADefinitionError(
+                        "Input symbols must be strings or integers"
+                    )
+                targets = target if isinstance(target, list) else [target]
+                if not all(isinstance(item, str) for item in targets):
+                    raise InvalidFSADefinitionError(
+                        "Transition targets must be state names"
+                    )
                 if isinstance(target, list):
                     for target_state in target:
                         if target_state not in fsa:
@@ -145,35 +169,115 @@ class StateMachine:
             else:
                 inputs.append(arg)
 
-        # Process each input symbol
+        # Commit each symbol together with its acceptance status.
         for symbol in inputs:
-            # Try both the original symbol and string version for key access
-            if symbol in self.fsa[self.state]:
-                symbol_key = symbol
-            elif str(symbol) in self.fsa[self.state]:
-                symbol_key = str(symbol)
-            else:
-                raise InvalidTransitionError(
-                    self.state, str(symbol), "No transition defined for this input"
-                )
-
-            # Use the key that was actually found in the dictionary
-            next_state = self.fsa[self.state][symbol_key]  # type: ignore[index]
-
-            # Handle NFA case where multiple states are possible
-            if isinstance(next_state, list):
-                if len(next_state) != 1:
-                    raise FSAError(
-                        f"NFA with multiple possible states not supported in callable mode. "
-                        f"State '{self.state}' has {len(next_state)} possible transitions for input '{symbol}'"
-                    )
-                next_state = next_state[0]
-
-            self.state = next_state
-
-        # Update acceptance status
-        self.accept = self.fsa[self.state].get("accept", False)
+            if symbol in ("start", "accept"):
+                raise InvalidTransitionError(str(self.state), str(symbol))
+            destinations: set[str] = set()
+            for state in self.active_states:
+                definition = self.fsa[state]
+                key = symbol if symbol in definition else str(symbol)
+                if key not in definition:
+                    if self.is_deterministic:
+                        raise InvalidTransitionError(
+                            state, str(symbol), "No transition defined for this input"
+                        )
+                    continue
+                target = definition[key]
+                destinations.update(target if isinstance(target, list) else [target])
+            self._set_active(destinations)
         return self
+
+    @property
+    def is_deterministic(self) -> bool:
+        """Whether every transition has exactly one destination."""
+        return not any(
+            isinstance(target, list)
+            for definition in self.fsa.values()
+            for symbol, target in definition.items()
+            if symbol not in ("start", "accept")
+        )
+
+    def _set_active(self, states: set[str]) -> None:
+        self.active_states = frozenset(states)
+        self.state = next(iter(states)) if len(states) == 1 else self.active_states
+        self.accept = any(self.fsa[state]["accept"] for state in states)
+
+    def reset(self) -> StateMachine:
+        """Restart execution at the declared start state."""
+        self._set_active(
+            {state for state, definition in self.fsa.items() if definition["start"]}
+        )
+        return self
+
+    def accepts(self, sequence: list[InputSymbol] | str) -> bool:
+        """Check a word from the start without changing this machine."""
+        machine = StateMachine(deepcopy(self.fsa))
+        try:
+            return machine(*sequence).accept
+        except InvalidTransitionError:
+            return False
+
+    def trace(self, sequence: list[InputSymbol] | str) -> list[dict[str, Any]]:
+        """Return the initial configuration and each input step without mutation."""
+        machine = StateMachine(deepcopy(self.fsa))
+        steps: list[dict[str, Any]] = [
+            {
+                "symbol": None,
+                "states": sorted(machine.active_states),
+                "accept": machine.accept,
+            }
+        ]
+        for symbol in sequence:
+            machine(symbol)
+            steps.append(
+                {
+                    "symbol": symbol,
+                    "states": sorted(machine.active_states),
+                    "accept": machine.accept,
+                }
+            )
+        return steps
+
+    def to_dfa(self) -> StateMachine:
+        """Construct an equivalent complete DFA using reachable state subsets.
+
+        Missing transitions enter the empty subset (a rejecting sink).
+        Epsilon transitions are not supported.
+        """
+        alphabet = sorted(
+            {
+                symbol
+                for definition in self.fsa.values()
+                for symbol in definition
+                if symbol not in ("start", "accept")
+            },
+            key=self._symbol_sort_key,
+        )
+        start = frozenset(
+            state for state, definition in self.fsa.items() if definition["start"]
+        )
+        names = {start: "S0"}
+        queue = deque([start])
+        result: FSADefinition = {}
+        while queue:
+            subset = queue.popleft()
+            definition: StateDefinition = {
+                "start": subset == start,
+                "accept": any(self.fsa[state]["accept"] for state in subset),
+            }
+            for symbol in alphabet:
+                targets: set[str] = set()
+                for state in subset:
+                    target = self.fsa[state].get(symbol, [])
+                    targets.update(target if isinstance(target, list) else [target])
+                destination = frozenset(targets)
+                if destination not in names:
+                    names[destination] = f"S{len(names)}"
+                    queue.append(destination)
+                definition[symbol] = names[destination]
+            result[names[subset]] = definition
+        return StateMachine(result)
 
     def __str__(self) -> str:
         """
@@ -260,6 +364,8 @@ class StateMachine:
         Raises:
             InvalidStateError: If any of the specified states don't exist.
         """
+        if not state_names:
+            raise InvalidFSADefinitionError("At least one state is required")
         # Validate that all states exist
         for state_name in state_names:
             if state_name not in self.fsa:
@@ -270,7 +376,7 @@ class StateMachine:
         combined_name = "{" + ",".join(sorted_names) + "}"
 
         # Collect all possible input symbols
-        all_symbols: set[InputSymbol] = set()
+        all_symbols: set[str] = set()
         for state_name in state_names:
             for symbol in self.fsa[state_name]:
                 if symbol not in ("start", "accept"):
@@ -279,13 +385,10 @@ class StateMachine:
         # Create combined state definition
         combined_state: StateDefinition = {}
 
-        for symbol in all_symbols:  # type: ignore[assignment]
+        for symbol in sorted(all_symbols, key=self._symbol_sort_key):
             target_states: set[StateName] = set()
             # Try both the original symbol and string version for key access
-            if symbol in self.fsa[state_names[0]]:
-                symbol_key = symbol
-            else:
-                symbol_key = str(symbol)
+            symbol_key = symbol
 
             for state_name in state_names:
                 if symbol_key in self.fsa[state_name]:
@@ -337,7 +440,9 @@ class StateMachine:
         new_fsa: FSADefinition = {}
         for old_name, state_def in self.fsa.items():
             new_name = name_mapping[old_name]
-            new_state_def = state_def.copy()
+            new_state_def = {
+                str(symbol): deepcopy(target) for symbol, target in state_def.items()
+            }
 
             # Update transitions to use new state names
             for key, value in new_state_def.items():
@@ -353,7 +458,11 @@ class StateMachine:
 
         # Update current state name
         if hasattr(self, "state"):
-            self.state = name_mapping[self.state]
+            if hasattr(self, "active_states"):
+                self._set_active({name_mapping[state] for state in self.active_states})
+            else:
+                assert isinstance(self.state, str)
+                self.state = name_mapping[self.state]
 
         return self
 
@@ -377,12 +486,15 @@ class StateMachine:
             transitions = state_def.copy()
 
             # Group symbols by their target states
-            symbol_groups: dict[StateName | list[StateName], list[InputSymbol]] = {}
+            symbol_groups: dict[Any, list[InputSymbol]] = {}
 
             for symbol, target in transitions.items():
                 if symbol in ("start", "accept"):
                     continue
 
+                target = (
+                    tuple(sorted(set(target))) if isinstance(target, list) else target
+                )
                 if target not in symbol_groups:
                     symbol_groups[target] = []
                 symbol_groups[target].append(symbol)
@@ -400,7 +512,9 @@ class StateMachine:
                     separator = ", " if add_spaces else ","
                     label = separator.join(str(s) for s in sorted_symbols)
 
-                optimized_transitions[label] = target
+                optimized_transitions[label] = (
+                    list(target) if isinstance(target, tuple) else target
+                )
 
             # Preserve start and accept flags
             optimized_transitions["start"] = transitions.get("start", False)
@@ -410,7 +524,7 @@ class StateMachine:
 
         return optimized_fsa
 
-    def _symbol_sort_key(self, symbol: InputSymbol) -> int | str:
+    def _symbol_sort_key(self, symbol: InputSymbol) -> tuple[int, int | str]:
         """
         Create a sort key for input symbols.
 
@@ -421,8 +535,8 @@ class StateMachine:
             A sortable key for the symbol.
         """
         if isinstance(symbol, int):
-            return symbol
-        return str(symbol)
+            return (0, symbol)
+        return (1, str(symbol))
 
     def remove_unreachable_states(self) -> StateMachine:
         """
@@ -437,10 +551,12 @@ class StateMachine:
         """
         # Find all reachable states using BFS
         reachable_states: set[StateName] = set()
-        queue = [self.state]
+        queue = deque(
+            state for state, definition in self.fsa.items() if definition["start"]
+        )
 
         while queue:
-            current_state = queue.pop(0)
+            current_state = queue.popleft()
             if current_state in reachable_states:
                 continue
 
@@ -466,186 +582,65 @@ class StateMachine:
         return self
 
     def minimize(self) -> StateMachine:
+        """Minimize a DFA by partition refinement and reset execution.
+
+        Partial DFAs are completed with a rejecting sink before refinement.
+        Convert NFAs with ``to_dfa()`` first. Work is computed on a copy so
+        failures do not leave the original machine partially modified.
         """
-        Minimize the DFA using the table-filling algorithm.
-
-        This method implements the standard DFA minimization algorithm that
-        identifies and merges equivalent states. The algorithm works by
-        iteratively refining partitions of states until no further refinement
-        is possible.
-
-        Returns:
-            Self to allow method chaining.
-
-        Raises:
-            MinimizationError: If minimization fails due to an unexpected condition.
-        """
+        if not self.is_deterministic:
+            raise MinimizationError("Convert an NFA with to_dfa() before minimization")
         if self.is_min:
             return self
-
-        try:
-            # Remove unreachable states first
-            self.remove_unreachable_states()
-            self._normalize()
-
-            # Get accepting states
-            accepting_states = {
-                int(state_name[1:])
-                for state_name, state_def in self.fsa.items()
-                if state_def.get("accept", False)
+        machine = self.to_dfa()
+        alphabet = [
+            symbol for symbol in machine.fsa["S0"] if symbol not in ("start", "accept")
+        ]
+        accepting = {
+            state for state, definition in machine.fsa.items() if definition["accept"]
+        }
+        partitions = [
+            group for group in (accepting, set(machine.fsa) - accepting) if group
+        ]
+        while True:
+            membership = {
+                state: index
+                for index, group in enumerate(partitions)
+                for state in group
             }
-
-            # Initialize table with accepting/non-accepting distinction
-            num_states = len(self.fsa)
-            table = self._initialize_minimization_table(num_states, accepting_states)
-
-            # Fill the table using the table-filling algorithm
-            table = self._fill_minimization_table(table, num_states)
-
-            # Find equivalent state groups
-            equivalent_groups = self._find_equivalent_states(table, num_states)
-
-            # Merge equivalent states
-            self._merge_equivalent_states(equivalent_groups)
-
-            # Normalize and mark as minimized
-            self._normalize()
-            self.is_min = True
-
-        except Exception as e:
-            raise MinimizationError(f"Minimization failed: {str(e)}") from e
-
+            refined: list[set[str]] = []
+            for group in partitions:
+                buckets: dict[tuple[int, ...], set[str]] = {}
+                for state in sorted(group):
+                    signature = tuple(
+                        membership[machine.fsa[state][symbol]] for symbol in alphabet
+                    )
+                    buckets.setdefault(signature, set()).add(state)
+                refined.extend(buckets.values())
+            if len(refined) == len(partitions):
+                break
+            partitions = refined
+        partitions.sort(key=lambda group: min(int(state[1:]) for state in group))
+        mapping = {
+            state: f"S{index}"
+            for index, group in enumerate(partitions)
+            for state in group
+        }
+        result: FSADefinition = {}
+        for index, group in enumerate(partitions):
+            representative = min(group)
+            result[f"S{index}"] = {
+                **{
+                    symbol: mapping[machine.fsa[representative][symbol]]
+                    for symbol in alphabet
+                },
+                "start": "S0" in group,
+                "accept": representative in accepting,
+            }
+        self.fsa = result
+        self.reset()
+        self.is_min = True
         return self
-
-    def _initialize_minimization_table(
-        self, num_states: int, accepting_states: set[int]
-    ) -> list[list[int]]:
-        """
-        Initialize the minimization table with accepting/non-accepting distinction.
-
-        Args:
-            num_states: Total number of states in the FSA.
-            accepting_states: Set of accepting state indices.
-
-        Returns:
-            Initialized table with 1s marking distinguishable state pairs.
-        """
-        table = [[0 for _ in range(num_states)] for _ in range(num_states)]
-
-        # Mark pairs where one state is accepting and the other is not
-        for i in range(num_states):
-            for j in range(i):
-                if (i in accepting_states) != (j in accepting_states):
-                    table[i][j] = table[j][i] = 1
-
-        return table
-
-    def _fill_minimization_table(
-        self, table: list[list[int]], num_states: int
-    ) -> list[list[int]]:
-        """
-        Fill the minimization table using the table-filling algorithm.
-
-        Args:
-            table: The minimization table to fill.
-            num_states: Total number of states in the FSA.
-
-        Returns:
-            The filled minimization table.
-        """
-        changed = True
-        while changed:
-            changed = False
-            old_table = [row[:] for row in table]
-
-            for i in range(num_states):
-                for j in range(i):
-                    if table[i][j] == 0:  # States not yet marked as distinguishable
-                        # Check if they become distinguishable through transitions
-                        for symbol in self.fsa[f"S{i}"]:
-                            if symbol in ("start", "accept"):
-                                continue
-
-                            state_i_target = self.fsa[f"S{i}"][symbol]
-                            state_j_target = self.fsa[f"S{j}"][symbol]
-
-                            # Handle both single states and lists
-                            if isinstance(state_i_target, list):
-                                state_i_target = state_i_target[0]
-                            if isinstance(state_j_target, list):
-                                state_j_target = state_j_target[0]
-
-                            target_i = int(state_i_target[1:])
-                            target_j = int(state_j_target[1:])
-
-                            if old_table[target_i][target_j] == 1:
-                                table[i][j] = table[j][i] = 1
-                                changed = True
-                                break
-
-        return table
-
-    def _find_equivalent_states(
-        self, table: list[list[int]], num_states: int
-    ) -> list[set[int]]:
-        """
-        Find groups of equivalent states from the filled table.
-
-        Args:
-            table: The filled minimization table.
-            num_states: Total number of states in the FSA.
-
-        Returns:
-            List of sets containing equivalent state indices.
-        """
-        equivalent_groups = []
-        processed = set()
-
-        for i in range(num_states):
-            if i in processed:
-                continue
-
-            # Find all states equivalent to state i
-            equivalent_set = {i}
-            for j in range(i + 1, num_states):
-                if table[i][j] == 0:  # States are equivalent
-                    equivalent_set.add(j)
-
-            equivalent_groups.append(equivalent_set)
-            processed.update(equivalent_set)
-
-        return equivalent_groups
-
-    def _merge_equivalent_states(self, equivalent_groups: list[set[int]]) -> None:
-        """
-        Merge equivalent states in the FSA.
-
-        Args:
-            equivalent_groups: Groups of equivalent state indices to merge.
-        """
-        # Create mapping from old states to new merged states
-        state_mapping: dict[StateName, StateName] = {}
-
-        for group in equivalent_groups:
-            if len(group) > 1:  # Only merge groups with multiple states
-                sorted_group = sorted(group)
-                keep_state = f"S{sorted_group[0]}"
-
-                # Map all states in the group to the kept state
-                for state_idx in sorted_group[1:]:
-                    state_mapping[f"S{state_idx}"] = keep_state
-                    del self.fsa[f"S{state_idx}"]
-
-        # Update all transitions to use the new state names
-        for _state_name, state_def in self.fsa.items():
-            for symbol, target in state_def.items():
-                if symbol in ("start", "accept"):
-                    continue
-
-                if isinstance(target, list):
-                    state_def[symbol] = [state_mapping.get(t, t) for t in target]
-                else:
-                    state_def[symbol] = state_mapping.get(target, target)
 
     def create_graph(
         self,
@@ -698,7 +693,10 @@ class StateMachine:
             # Add transitions
             for symbol, target in state_def.items():
                 if symbol not in ("start", "accept"):
-                    graph.edge(state_name, target, label=str(symbol), arrowsize="0.75")
+                    for destination in target if isinstance(target, list) else [target]:
+                        graph.edge(
+                            state_name, destination, label=str(symbol), arrowsize="0.75"
+                        )
 
         return graph
 

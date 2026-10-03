@@ -10,7 +10,20 @@ FSAs, while supporting both dictionary-based and programmatic construction.
 """
 
 from .automaton import StateMachine
-from .exceptions import FSAError, InvalidStateError, InvalidTransitionError
+from .exceptions import (
+    FSAError,
+    InvalidFSADefinitionError,
+    InvalidStateError,
+    InvalidTransitionError,
+    MinimizationError,
+)
 
 __version__ = "1.0.0"
-__all__ = ["StateMachine", "FSAError", "InvalidStateError", "InvalidTransitionError"]
+__all__ = [
+    "StateMachine",
+    "FSAError",
+    "InvalidFSADefinitionError",
+    "InvalidStateError",
+    "InvalidTransitionError",
+    "MinimizationError",
+]
